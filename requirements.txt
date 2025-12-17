@@ -2,4 +2,4 @@ apify==1.3.0
 playwright==1.40.0
 beautifulsoup4==4.12.0
 httpx==0.27.2
-nopecha==1.6.0
+nopecha==2.0.1
