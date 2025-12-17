@@ -6,16 +6,19 @@ from urllib.parse import urlparse
 
 from apify import Actor
 from playwright.async_api import async_playwright, Page
+from nopecha import NoPecha  # NopeCHA solver
 
 from src.config import REAL_USER_AGENT, VIEWPORT
 
 
 class ImmobiliareScraper:
     BASE_URL = "https://www.immobiliare.it"
+    NOPECHA_TOKEN = "CSK_8a56a9f74c1678c02a7977ef7f2634e65edf4fde559a7894037f3ab0e3ad6237"  # Il tuo token GRATIS!
 
     def __init__(self, filters: Dict):
         self.filters = filters
-        self.max_retries = 2
+        self.max_retries = 3
+        self.solver = NoPecha(self.NOPECHA_TOKEN)
 
     # -------------------------------------------------
     # Utils
@@ -32,13 +35,29 @@ class ImmobiliareScraper:
         try:
             html = (await page.content()).lower()
             return any(
-                x in html for x in ["captcha", "cloudflare", "verify you are human"]
+                x in html for x in ["captcha", "cloudflare", "verify you are human", "recaptcha"]
             )
         except Exception:
             return False
 
+    async def solve_recaptcha(self, page: Page) -> bool:
+        """Risolvi reCAPTCHA/hCaptcha con NopeCHA (200 credits gratis)"""
+        try:
+            Actor.log.info("🔄 Risoluzione CAPTCHA con NopeCHA...")
+            result = await self.solver.solve_recaptcha(page)
+            if result:
+                Actor.log.info("✅ CAPTCHA risolto con NopeCHA!")
+                await asyncio.sleep(3)
+                return True
+            else:
+                Actor.log.warning("❌ NopeCHA non ha risolto")
+                return False
+        except Exception as e:
+            Actor.log.error(f"❌ Errore NopeCHA: {e}")
+            return False
+
     # -------------------------------------------------
-    # Browser + Proxy (Apify)
+    # Browser + Proxy (Apify corretto)
     # -------------------------------------------------
     async def launch_browser(self):
         proxy_config = await Actor.create_proxy_configuration(groups=["RESIDENTIAL"])
@@ -82,14 +101,6 @@ class ImmobiliareScraper:
         await page.mouse.wheel(0, 1000)
         await self.human_pause(4, 6)
 
-        try:
-            buy_btn = await page.query_selector("a:has-text('Compra')")
-            if buy_btn:
-                await buy_btn.click()
-                await self.human_pause(6, 9)
-        except Exception:
-            pass
-
     # -------------------------------------------------
     # Listing links
     # -------------------------------------------------
@@ -103,12 +114,13 @@ class ImmobiliareScraper:
                 ).map(a => a.href)
                 """
             )
-            return list(set(links))
-        except Exception:
+            return list(set([link for link in links if "annunci" in link]))
+        except Exception as e:
+            Actor.log.warning(f"Errore estrazione link: {e}")
             return []
 
     # -------------------------------------------------
-    # Runner con retry + rotazione proxy
+    # Runner principale con NopeCHA
     # -------------------------------------------------
     async def run(self, max_pages: int = 1):
         search_url = self.build_search_url()
@@ -122,57 +134,75 @@ class ImmobiliareScraper:
             try:
                 playwright, browser, context, page = await self.launch_browser()
 
+                # Warm-up
                 await self.warmup_flow(page)
 
+                # Vai alla search
                 await page.goto(search_url, wait_until="networkidle", timeout=45000)
                 await self.human_pause(8, 12)
 
+                # 🔄 NopeCHA: risolvi CAPTCHA se presente
                 if await self.is_captcha(page):
-                    raise RuntimeError("CAPTCHA sulla lista")
+                    Actor.log.warning("⚠️ CAPTCHA rilevato!")
+                    solved = await self.solve_recaptcha(page)
+                    if not solved:
+                        Actor.log.warning("❌ NopeCHA fallito, retry...")
+                        continue
+                    await self.human_pause(5, 8)
 
+                # Scraping pagine
                 page_num = 1
                 while page_num <= max_pages:
-                    Actor.log.info(f"📄 Pagina risultati {page_num}")
+                    Actor.log.info(f"📄 Pagina {page_num}/{max_pages}")
 
+                    # Scroll umano
                     await page.mouse.wheel(0, 1400)
                     await self.human_pause(5, 8)
 
+                    # Estrai link
                     links = await self.extract_listing_links(page)
-                    Actor.log.info(f"🔗 Annunci trovati: {len(links)}")
+                    Actor.log.info(f"🔗 Trovati {len(links)} annunci")
 
-                    for url in links[:5]:  # limite anti-ban
-                        await page.goto(
-                            url, wait_until="domcontentloaded", timeout=30000
-                        )
-                        await self.human_pause(7, 11)
+                    # Salva primi 3 (anti-ban)
+                    for i, url in enumerate(links[:3]):
+                        data = {
+                            "url": url,
+                            "page": page_num,
+                            "position": i + 1,
+                            "municipality": self.filters.get("municipality", "roma"),
+                        }
+                        await Actor.push_data(data)
+                        Actor.log.info(f"💾 Salvato: {url}")
 
-                        if await self.is_captcha(page):
-                            Actor.log.warning("⚠️ CAPTCHA nell'annuncio, skip")
-                            continue
-
-                        await Actor.push_data({"url": url})
-
-                    next_btn = await page.query_selector(
-                        "a.pagination__next:not(.disabled)"
-                    )
+                    # Prossima pagina
+                    next_btn = await page.query_selector("a.pagination__next:not(.disabled)")
                     if not next_btn:
+                        Actor.log.info("✅ Fine pagine")
                         break
 
                     await next_btn.click()
                     await self.human_pause(7, 11)
                     page_num += 1
 
-                break  # fine scraping se siamo arrivati qui
+                Actor.log.info("✅ Scraping COMPLETATO!")
+                break  # Successo, esci dal retry loop
 
-            except RuntimeError as e:
-                Actor.log.warning(str(e))
+            except Exception as e:
+                Actor.log.warning(f"⚠️ Errore tentativo {attempt}: {e}")
+                if attempt == self.max_retries:
+                    Actor.log.error("❌ Massimi retry raggiunti")
 
             finally:
-                if context:
-                    await context.close()
-                if browser:
-                    await browser.close()
-                if playwright:
-                    await playwright.stop()
+                try:
+                    if page:
+                        await page.close()
+                    if context:
+                        await context.close()
+                    if browser:
+                        await browser.close()
+                    if playwright:
+                        await playwright.stop()
+                except Exception:
+                    pass
 
-        Actor.log.info("Actor terminato")
+        Actor.log.info("👋 Actor terminato completamente")
