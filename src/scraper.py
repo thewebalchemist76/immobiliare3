@@ -2,6 +2,7 @@
 import asyncio
 import random
 from typing import Dict, List
+from urllib.parse import urlparse
 
 from apify import Actor
 from playwright.async_api import async_playwright, Page
@@ -30,25 +31,32 @@ class ImmobiliareScraper:
     async def is_captcha(self, page: Page) -> bool:
         try:
             html = (await page.content()).lower()
-            return any(x in html for x in ["captcha", "cloudflare", "verify you are human"])
+            return any(
+                x in html for x in ["captcha", "cloudflare", "verify you are human"]
+            )
         except Exception:
             return False
 
     # -------------------------------------------------
-    # Browser + Proxy (APIFY PYTHON CORRETTO)
+    # Browser + Proxy (Apify)
     # -------------------------------------------------
     async def launch_browser(self):
-        proxy_config = await Actor.create_proxy_configuration(
-            groups=["RESIDENTIAL"]
-        )
+        proxy_config = await Actor.create_proxy_configuration(groups=["RESIDENTIAL"])
         proxy_url = await proxy_config.new_url()
+
+        parsed = urlparse(proxy_url)
+        proxy_settings = {
+            "server": f"{parsed.scheme}://{parsed.hostname}:{parsed.port}",
+            "username": parsed.username,
+            "password": parsed.password,
+        }
 
         playwright = await async_playwright().start()
 
         browser = await playwright.chromium.launch(
             headless=False,
             slow_mo=100,
-            proxy={"server": proxy_url},
+            proxy=proxy_settings,
             args=["--disable-blink-features=AutomationControlled"],
         )
 
@@ -133,14 +141,16 @@ class ImmobiliareScraper:
                     Actor.log.info(f"🔗 Annunci trovati: {len(links)}")
 
                     for url in links[:5]:  # limite anti-ban
-                        await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                        await page.goto(
+                            url, wait_until="domcontentloaded", timeout=30000
+                        )
                         await self.human_pause(7, 11)
 
                         if await self.is_captcha(page):
                             Actor.log.warning("⚠️ CAPTCHA nell'annuncio, skip")
                             continue
 
-                        Actor.push_data({"url": url})
+                        await Actor.push_data({"url": url})
 
                     next_btn = await page.query_selector(
                         "a.pagination__next:not(.disabled)"
@@ -152,7 +162,7 @@ class ImmobiliareScraper:
                     await self.human_pause(7, 11)
                     page_num += 1
 
-                break  # fine scraping
+                break  # fine scraping se siamo arrivati qui
 
             except RuntimeError as e:
                 Actor.log.warning(str(e))
