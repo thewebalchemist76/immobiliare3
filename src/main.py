@@ -33,7 +33,8 @@ async def main():
             "keywords": actor_input.get("keywords"),
         }
 
-        max_pages = actor_input.get("max_pages", 3)
+        # usa max_items come numero di pagine
+        max_pages = actor_input.get("max_items", 3)
 
         scraper = ImmobiliareScraper(filters)
         await scraper.run(max_pages=max_pages)
