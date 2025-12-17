@@ -1,4 +1,4 @@
-FFROM apify/actor-python-playwright:3.11
+FROM apify/actor-python-playwright:3.11
 
 # Installa Python dependencies
 COPY requirements.txt ./
