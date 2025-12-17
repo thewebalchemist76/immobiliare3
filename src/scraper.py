@@ -32,17 +32,20 @@ class ImmobiliareScraper:
         return any(k in content for k in ["captcha", "cloudflare", "verify you are human"])
 
     # ----------------------------
-    # Browser / Proxy
+    # Browser / Proxy (FIX AUTH)
     # ----------------------------
     async def launch_browser(self):
         proxy_conf = await Actor.create_proxy_configuration(groups=["RESIDENTIAL"])
         proxy_url = await proxy_conf.new_url()
 
         playwright = await async_playwright().start()
+
+        # IMPORTANT: Apify proxy auth is embedded in the URL
         browser = await playwright.chromium.launch(
             headless=False,
             slow_mo=80,
             proxy={"server": proxy_url},
+            args=["--disable-blink-features=AutomationControlled"],
         )
 
         context = await browser.new_context(
@@ -59,16 +62,16 @@ class ImmobiliareScraper:
     # Anti-captcha navigation flow
     # ----------------------------
     async def warmup_flow(self, page: Page):
-        # 1. Homepage
-        await page.goto(self.BASE_URL, wait_until="domcontentloaded")
+        # Homepage
+        await page.goto(self.BASE_URL, wait_until="load")
         await self.human_pause(6, 9)
 
-        # 2. Fake user interaction
-        await page.mouse.move(300, 400)
-        await page.mouse.wheel(0, 800)
+        # Simulated user activity
+        await page.mouse.move(200, 300)
+        await page.mouse.wheel(0, 900)
         await self.human_pause(3, 5)
 
-        # 3. Click "Compra" if exists
+        # Click "Compra" if visible
         try:
             buy_btn = await page.query_selector("a:has-text('Compra')")
             if buy_btn:
@@ -81,24 +84,16 @@ class ImmobiliareScraper:
     # Listing extraction
     # ----------------------------
     async def extract_listing_links(self, page: Page) -> List[str]:
-        selectors = [
-            "article",
-            "a[href*='/annunci/']",
-        ]
-
-        for sel in selectors:
-            try:
-                await page.wait_for_selector(sel, timeout=4000)
-                links = await page.evaluate(
-                    """
-                    () => Array.from(document.querySelectorAll("a[href*='/annunci/']")).map(a => a.href)
-                    """
-                )
-                return list(set(links))
-            except Exception:
-                continue
-
-        return []
+        try:
+            await page.wait_for_selector("a[href*='/annunci/']", timeout=5000)
+            links = await page.evaluate(
+                """
+                () => Array.from(document.querySelectorAll("a[href*='/annunci/']")).map(a => a.href)
+                """
+            )
+            return list(set(links))
+        except Exception:
+            return []
 
     # ----------------------------
     # Main runner with retry
@@ -107,42 +102,38 @@ class ImmobiliareScraper:
         search_url = self.build_search_url()
         Actor.log.info(f"🔍 Search URL: {search_url}")
 
-        attempt = 0
-        while attempt < self.max_retries:
-            attempt += 1
+        for attempt in range(1, self.max_retries + 1):
             Actor.log.info(f"🔁 Tentativo {attempt}/{self.max_retries}")
-
             playwright = browser = context = page = None
+
             try:
                 playwright, browser, context, page = await self.launch_browser()
 
-                # Warm-up anti bot
+                # Warm-up
                 await self.warmup_flow(page)
 
-                # Go to search
+                # Go to results
                 await page.goto(search_url, wait_until="networkidle")
                 await self.human_pause(8, 12)
 
                 if await self.is_captcha(page):
-                    Actor.log.warning("⚠️ CAPTCHA rilevato sulla lista, cambio proxy")
-                    raise RuntimeError("CAPTCHA")
+                    raise RuntimeError("CAPTCHA on listing")
 
                 page_num = 1
                 while page_num <= max_pages:
                     Actor.log.info(f"📄 Pagina risultati {page_num}")
-
                     await page.mouse.wheel(0, 1200)
                     await self.human_pause(4, 7)
 
                     links = await self.extract_listing_links(page)
                     Actor.log.info(f"🔗 Annunci trovati: {len(links)}")
 
-                    for url in links[:5]:  # limite hard anti-ban
+                    for url in links[:5]:  # hard limit anti-ban
                         await page.goto(url, wait_until="domcontentloaded")
                         await self.human_pause(6, 9)
 
                         if await self.is_captcha(page):
-                            Actor.log.warning("⚠️ CAPTCHA dentro annuncio, skip")
+                            Actor.log.warning("⚠️ CAPTCHA in annuncio, skip")
                             continue
 
                         Actor.push_data({"url": url})
@@ -158,8 +149,8 @@ class ImmobiliareScraper:
                 Actor.log.info("✅ Scraping completato")
                 break
 
-            except RuntimeError:
-                Actor.log.warning("🔄 Retry con nuovo proxy")
+            except RuntimeError as e:
+                Actor.log.warning(f"⚠️ {e}, cambio proxy")
 
             finally:
                 if context:
