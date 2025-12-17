@@ -1,7 +1,7 @@
 import asyncio
 import random
-from urllib.parse import urlencode
 from typing import Dict, List
+from urllib.parse import urlparse
 
 from apify import Actor
 from playwright.async_api import async_playwright, Page
@@ -19,9 +19,7 @@ class ImmobiliareScraper:
     def build_search_url(self) -> str:
         municipality = self.filters.get("municipality", "roma").lower()
         operation = self.filters.get("operation", "vendita").lower()
-        path = f"/{operation}-case/{municipality}/"
-        # qui puoi aggiungere querystring con urlencode(params) se vuoi usare tutti i filtri
-        return f"{self.BASE_URL}{path}"
+        return f"{self.BASE_URL}/{operation}-case/{municipality}/"
 
     async def human_pause(self, min_s: int = 2, max_s: int = 4) -> None:
         await asyncio.sleep(min_s + random.random() * (max_s - min_s))
@@ -36,7 +34,7 @@ class ImmobiliareScraper:
         working_selector = None
         for selector in selectors:
             try:
-                await page.wait_for_selector(selector, timeout=3000)
+                await page.wait_for_selector(selector, timeout=4000)
                 working_selector = selector
                 Actor.log.info(f"Using selector: {selector}")
                 break
@@ -48,10 +46,10 @@ class ImmobiliareScraper:
 
         links = await page.evaluate(
             f"""
-        () => Array.from(
-            document.querySelectorAll('{working_selector} a[href*="/annunci/"]')
-        ).map(a => a.href)
-        """
+            () => Array.from(
+                document.querySelectorAll('{working_selector} a[href*="/annunci/"]')
+            ).map(a => a.href)
+            """
         )
 
         return list(set(links))
@@ -60,14 +58,22 @@ class ImmobiliareScraper:
         search_url = self.build_search_url()
         Actor.log.info(f"🔍 Search URL: {search_url}")
 
+        # ✅ Proxy Apify corretto (con auth separata)
         proxy_conf = await Actor.create_proxy_configuration(groups=["RESIDENTIAL"])
         proxy_url = await proxy_conf.new_url()
+        parsed = urlparse(proxy_url)
+
+        proxy = {
+            "server": f"{parsed.scheme}://{parsed.hostname}:{parsed.port}",
+            "username": parsed.username,
+            "password": parsed.password,
+        }
 
         async with async_playwright() as p:
             browser = await p.chromium.launch(
                 headless=False,
                 slow_mo=50,
-                proxy={"server": proxy_url},
+                proxy=proxy,
             )
 
             context = await browser.new_context(
@@ -79,8 +85,8 @@ class ImmobiliareScraper:
 
             page = await context.new_page()
 
-            # entra piano nel sito
-            await page.goto(self.BASE_URL)
+            # 🔹 ingresso soft nel sito
+            await page.goto(self.BASE_URL, wait_until="load")
             await self.human_pause(4, 6)
 
             await page.goto(search_url, wait_until="networkidle")
@@ -90,24 +96,24 @@ class ImmobiliareScraper:
             while page_num <= max_pages:
                 Actor.log.info(f"📄 Pagina risultati {page_num}")
 
-                # finta attività utente
+                # attività utente finta
                 await page.mouse.move(400, 500)
                 await page.mouse.wheel(0, 1200)
                 await self.human_pause()
 
                 html = await page.content()
                 if "captcha" in html.lower():
-                    Actor.log.error("❌ CAPTCHA rilevato sulla pagina lista, stop.")
+                    Actor.log.error("❌ CAPTCHA rilevato sulla pagina lista. Stop.")
                     break
 
                 links = await self.extract_listing_links(page)
                 Actor.log.info(f"🔗 Link trovati: {len(links)}")
 
-                # TODO: qui puoi iterare sui link e aprire i dettagli
+                # 🔹 apri annunci (base)
+                for url in links:
+                    await self.scrape_listing(context, url)
 
-                next_btn = await page.query_selector(
-                    "a.pagination__next:not(.disabled)"
-                )
+                next_btn = await page.query_selector("a.pagination__next:not(.disabled)")
                 if not next_btn:
                     break
 
@@ -116,3 +122,34 @@ class ImmobiliareScraper:
                 page_num += 1
 
             await browser.close()
+
+    async def scrape_listing(self, context, url: str) -> None:
+        page = await context.new_page()
+
+        try:
+            await page.goto(url, wait_until="networkidle")
+            await self.human_pause(3, 5)
+
+            html = await page.content()
+            if "captcha" in html.lower():
+                Actor.log.warning("⚠️ CAPTCHA su annuncio, skip")
+                return
+
+            soup = BeautifulSoup(html, "html.parser")
+
+            data = {
+                "url": url,
+                "title": soup.select_one("h1")
+                and soup.select_one("h1").get_text(strip=True),
+                "price": soup.select_one("li.in-detail__mainFeaturesPrice")
+                and soup.select_one("li.in-detail__mainFeaturesPrice").get_text(strip=True),
+            }
+
+            await Actor.push_data(data)
+            Actor.log.info(f"✅ Scraped: {data.get('title')}")
+
+        except Exception as e:
+            Actor.log.warning(f"⚠️ Errore annuncio: {e}")
+
+        finally:
+            await page.close()
