@@ -1,11 +1,10 @@
+# scraper.py
 import asyncio
 import random
 from typing import Dict, List
-from urllib.parse import urlparse
 
 from apify import Actor
 from playwright.async_api import async_playwright, Page
-from bs4 import BeautifulSoup
 
 from src.config import REAL_USER_AGENT, VIEWPORT
 
@@ -15,141 +14,159 @@ class ImmobiliareScraper:
 
     def __init__(self, filters: Dict):
         self.filters = filters
+        self.max_retries = 2
+
+    # ----------------------------
+    # Utils
+    # ----------------------------
+    async def human_pause(self, min_s: int = 3, max_s: int = 6):
+        await asyncio.sleep(min_s + random.random() * (max_s - min_s))
 
     def build_search_url(self) -> str:
         municipality = self.filters.get("municipality", "roma").lower()
         operation = self.filters.get("operation", "vendita").lower()
         return f"{self.BASE_URL}/{operation}-case/{municipality}/"
 
-    async def human_pause(self, min_s: int = 2, max_s: int = 4) -> None:
-        await asyncio.sleep(min_s + random.random() * (max_s - min_s))
+    async def is_captcha(self, page: Page) -> bool:
+        content = (await page.content()).lower()
+        return any(k in content for k in ["captcha", "cloudflare", "verify you are human"])
 
+    # ----------------------------
+    # Browser / Proxy
+    # ----------------------------
+    async def launch_browser(self):
+        proxy_conf = await Actor.create_proxy_configuration(groups=["RESIDENTIAL"])
+        proxy_url = await proxy_conf.new_url()
+
+        playwright = await async_playwright().start()
+        browser = await playwright.chromium.launch(
+            headless=False,
+            slow_mo=80,
+            proxy={"server": proxy_url},
+        )
+
+        context = await browser.new_context(
+            user_agent=REAL_USER_AGENT,
+            viewport=VIEWPORT,
+            locale="it-IT",
+            timezone_id="Europe/Rome",
+        )
+
+        page = await context.new_page()
+        return playwright, browser, context, page
+
+    # ----------------------------
+    # Anti-captcha navigation flow
+    # ----------------------------
+    async def warmup_flow(self, page: Page):
+        # 1. Homepage
+        await page.goto(self.BASE_URL, wait_until="domcontentloaded")
+        await self.human_pause(6, 9)
+
+        # 2. Fake user interaction
+        await page.mouse.move(300, 400)
+        await page.mouse.wheel(0, 800)
+        await self.human_pause(3, 5)
+
+        # 3. Click "Compra" if exists
+        try:
+            buy_btn = await page.query_selector("a:has-text('Compra')")
+            if buy_btn:
+                await buy_btn.click()
+                await self.human_pause(5, 7)
+        except Exception:
+            pass
+
+    # ----------------------------
+    # Listing extraction
+    # ----------------------------
     async def extract_listing_links(self, page: Page) -> List[str]:
         selectors = [
-            ".in-card",
-            ".nd-list__item.in-realEstateResults__item",
-            "article[class*='card']",
+            "article",
+            "a[href*='/annunci/']",
         ]
 
-        working_selector = None
-        for selector in selectors:
+        for sel in selectors:
             try:
-                await page.wait_for_selector(selector, timeout=4000)
-                working_selector = selector
-                Actor.log.info(f"Using selector: {selector}")
-                break
+                await page.wait_for_selector(sel, timeout=4000)
+                links = await page.evaluate(
+                    """
+                    () => Array.from(document.querySelectorAll("a[href*='/annunci/']")).map(a => a.href)
+                    """
+                )
+                return list(set(links))
             except Exception:
                 continue
 
-        if not working_selector:
-            return []
+        return []
 
-        links = await page.evaluate(
-            f"""
-            () => Array.from(
-                document.querySelectorAll('{working_selector} a[href*="/annunci/"]')
-            ).map(a => a.href)
-            """
-        )
-
-        return list(set(links))
-
-    async def run(self, max_pages: int = 3) -> None:
+    # ----------------------------
+    # Main runner with retry
+    # ----------------------------
+    async def run(self, max_pages: int = 1):
         search_url = self.build_search_url()
         Actor.log.info(f"🔍 Search URL: {search_url}")
 
-        # ✅ Proxy Apify corretto (con auth separata)
-        proxy_conf = await Actor.create_proxy_configuration(groups=["RESIDENTIAL"])
-        proxy_url = await proxy_conf.new_url()
-        parsed = urlparse(proxy_url)
+        attempt = 0
+        while attempt < self.max_retries:
+            attempt += 1
+            Actor.log.info(f"🔁 Tentativo {attempt}/{self.max_retries}")
 
-        proxy = {
-            "server": f"{parsed.scheme}://{parsed.hostname}:{parsed.port}",
-            "username": parsed.username,
-            "password": parsed.password,
-        }
+            playwright = browser = context = page = None
+            try:
+                playwright, browser, context, page = await self.launch_browser()
 
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(
-                headless=False,
-                slow_mo=50,
-                proxy=proxy,
-            )
+                # Warm-up anti bot
+                await self.warmup_flow(page)
 
-            context = await browser.new_context(
-                user_agent=REAL_USER_AGENT,
-                viewport=VIEWPORT,
-                locale="it-IT",
-                timezone_id="Europe/Rome",
-            )
+                # Go to search
+                await page.goto(search_url, wait_until="networkidle")
+                await self.human_pause(8, 12)
 
-            page = await context.new_page()
+                if await self.is_captcha(page):
+                    Actor.log.warning("⚠️ CAPTCHA rilevato sulla lista, cambio proxy")
+                    raise RuntimeError("CAPTCHA")
 
-            # 🔹 ingresso soft nel sito
-            await page.goto(self.BASE_URL, wait_until="load")
-            await self.human_pause(4, 6)
+                page_num = 1
+                while page_num <= max_pages:
+                    Actor.log.info(f"📄 Pagina risultati {page_num}")
 
-            await page.goto(search_url, wait_until="networkidle")
-            await self.human_pause(5, 7)
+                    await page.mouse.wheel(0, 1200)
+                    await self.human_pause(4, 7)
 
-            page_num = 1
-            while page_num <= max_pages:
-                Actor.log.info(f"📄 Pagina risultati {page_num}")
+                    links = await self.extract_listing_links(page)
+                    Actor.log.info(f"🔗 Annunci trovati: {len(links)}")
 
-                # attività utente finta
-                await page.mouse.move(400, 500)
-                await page.mouse.wheel(0, 1200)
-                await self.human_pause()
+                    for url in links[:5]:  # limite hard anti-ban
+                        await page.goto(url, wait_until="domcontentloaded")
+                        await self.human_pause(6, 9)
 
-                html = await page.content()
-                if "captcha" in html.lower():
-                    Actor.log.error("❌ CAPTCHA rilevato sulla pagina lista. Stop.")
-                    break
+                        if await self.is_captcha(page):
+                            Actor.log.warning("⚠️ CAPTCHA dentro annuncio, skip")
+                            continue
 
-                links = await self.extract_listing_links(page)
-                Actor.log.info(f"🔗 Link trovati: {len(links)}")
+                        Actor.push_data({"url": url})
 
-                # 🔹 apri annunci (base)
-                for url in links:
-                    await self.scrape_listing(context, url)
+                    next_btn = await page.query_selector("a.pagination__next:not(.disabled)")
+                    if not next_btn:
+                        break
 
-                next_btn = await page.query_selector("a.pagination__next:not(.disabled)")
-                if not next_btn:
-                    break
+                    await next_btn.click()
+                    await self.human_pause(6, 10)
+                    page_num += 1
 
-                await next_btn.click()
-                await self.human_pause(4, 6)
-                page_num += 1
+                Actor.log.info("✅ Scraping completato")
+                break
 
-            await browser.close()
+            except RuntimeError:
+                Actor.log.warning("🔄 Retry con nuovo proxy")
 
-    async def scrape_listing(self, context, url: str) -> None:
-        page = await context.new_page()
+            finally:
+                if context:
+                    await context.close()
+                if browser:
+                    await browser.close()
+                if playwright:
+                    await playwright.stop()
 
-        try:
-            await page.goto(url, wait_until="networkidle")
-            await self.human_pause(3, 5)
-
-            html = await page.content()
-            if "captcha" in html.lower():
-                Actor.log.warning("⚠️ CAPTCHA su annuncio, skip")
-                return
-
-            soup = BeautifulSoup(html, "html.parser")
-
-            data = {
-                "url": url,
-                "title": soup.select_one("h1")
-                and soup.select_one("h1").get_text(strip=True),
-                "price": soup.select_one("li.in-detail__mainFeaturesPrice")
-                and soup.select_one("li.in-detail__mainFeaturesPrice").get_text(strip=True),
-            }
-
-            await Actor.push_data(data)
-            Actor.log.info(f"✅ Scraped: {data.get('title')}")
-
-        except Exception as e:
-            Actor.log.warning(f"⚠️ Errore annuncio: {e}")
-
-        finally:
-            await page.close()
+        Actor.log.info("🏁 Actor terminato")
