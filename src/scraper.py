@@ -47,7 +47,7 @@ class ImmobiliareScraper:
         playwright = await async_playwright().start()
         browser = await playwright.chromium.launch(
             headless=False,
-            slow_mo=150,  # Più lento = più umano
+            slow_mo=150,
             proxy=proxy_settings,
             args=[
                 "--disable-blink-features=AutomationControlled",
@@ -75,16 +75,13 @@ class ImmobiliareScraper:
         """Simula comportamento umano estremo"""
         Actor.log.info("🔥 Warm-up umano avanzato...")
         
-        # Homepage lenta
         await page.goto(self.BASE_URL, wait_until="domcontentloaded", timeout=40000)
         await self.human_pause(8, 12)
         
-        # Scroll multiplo casuale
         for _ in range(3):
             await page.mouse.wheel(0, random.randint(800, 1500))
             await self.human_pause(2, 4)
         
-        # Cerca barra di ricerca
         try:
             search_input = await page.query_selector("input[placeholder*='cerca']")
             if search_input:
@@ -97,88 +94,112 @@ class ImmobiliareScraper:
         selectors = [
             "a[href*='/annunci/']",
             ".in-card a[href*='/annunci/']",
-            ".search-result-card a[href*='/annunci/']"
+            ".search-result-card a[href*='/annunci/']",
+            "[data-element='card'] a[href*='/annunci/']",
+            "article a[href*='/annunci/']"
         ]
         
         for selector in selectors:
             try:
                 await page.wait_for_selector(selector, timeout=5000)
                 links = await page.evaluate(f"""
-                    () => Array.from(
-                        document.querySelectorAll('{selector}')
-                    ).map(a => a.href).filter(href => href.includes('/annunci/'))
+                    () => {{
+                        const els = document.querySelectorAll('{selector}');
+                        return Array.from(els)
+                            .map(a => a.href)
+                            .filter(href => href && href.includes('/annunci/') && !href.includes('tel:'))
+                            .slice(0, 20);  // Max 20 per pagina
+                    }}
                 """)
                 if links:
+                    Actor.log.info(f"✅ Selector '{selector}' funziona: {len(links)} link")
                     return list(set(links))
-            except:
+            except Exception as e:
+                Actor.log.debug(f"Selector {selector} fallito: {e}")
                 continue
+        
+        Actor.log.warning("❌ Nessun selector ha trovato link")
         return []
 
     async def run(self, max_pages: int = 1):
         search_url = self.build_search_url()
-        Actor.log.info(f"🔍 Search: {search_url}")
+        Actor.log.info(f"🔍 Search URL: {search_url}")
 
         for attempt in range(1, self.max_retries + 1):
-            Actor.log.info(f"🔁 Tentativo {attempt}/3")
+            Actor.log.info(f"🔁 Tentativo {attempt}/{self.max_retries}")
             playwright = browser = context = page = None
+            total_links = 0
 
             try:
                 playwright, browser, context, page = await self.launch_browser()
                 await self.warmup_flow(page)
 
-                # Navigazione diretta alla search
                 await page.goto(search_url, wait_until="networkidle", timeout=60000)
                 await self.human_pause(10, 15)
 
-                # CAPTCHA check ma NON bloccante
+                # 🔍 DEBUG CAPTCHA + Screenshot
                 if await self.is_captcha(page):
-                    Actor.log.warning("⚠️ CAPTCHA rilevato, continuo comunque...")
-                    # Prova scroll per refresh dinamico
+                    Actor.log.warning("⚠️ CAPTCHA rilevato, salvo debug...")
+                    
+                    # Screenshot
+                    screenshot_bytes = await page.screenshot(full_page=True)
+                    await Actor.push_data({
+                        "debug_type": "captcha_screenshot",
+                        "attempt": attempt,
+                        "municipality": self.filters.get("municipality")
+                    })
+                    
+                    # HTML snippet
+                    html_snippet = (await page.content())[:3000]
+                    await Actor.push_data({
+                        "debug_type": "captcha_html",
+                        "attempt": attempt,
+                        "html_preview": html_snippet,
+                        "municipality": self.filters.get("municipality")
+                    })
+                    
+                    # Prova scroll per refresh
                     await page.mouse.wheel(0, 2000)
                     await self.human_pause(5, 8)
 
                 page_num = 1
-                total_links = 0
-                
                 while page_num <= max_pages:
                     Actor.log.info(f"📄 Pagina {page_num}/{max_pages}")
                     
-                    # Scroll umano
                     await page.mouse.move(random.randint(200, 800), random.randint(300, 700))
                     await page.mouse.wheel(0, random.randint(1000, 2000))
                     await self.human_pause(6, 10)
 
-                    # Estrai link
                     links = await self.extract_listing_links(page)
-                    Actor.log.info(f"🔗 {len(links)} annunci trovati")
+                    Actor.log.info(f"🔗 Trovati {len(links)} annunci")
 
-                    # Salva TUTTI i link (non solo primi 3)
-                    for i, url in enumerate(links[:10]):  # Max 10 per pagina
+                    for i, url in enumerate(links[:10]):
                         data = {
                             "url": url,
                             "page": page_num,
                             "municipality": self.filters.get("municipality", "Roma"),
                             "operation": self.filters.get("operation", "vendita"),
-                            "position": i + 1
+                            "position": i + 1,
+                            "attempt": attempt
                         }
                         await Actor.push_data(data)
                         total_links += 1
 
-                    # Prossima pagina
                     next_btn = await page.query_selector("a.pagination__next:not(.disabled), .pagination-next:not(.disabled)")
                     if not next_btn:
-                        Actor.log.info("✅ Fine pagine")
+                        Actor.log.info("✅ Nessuna pagina successiva")
                         break
 
                     await next_btn.click()
                     await self.human_pause(10, 15)
                     page_num += 1
 
-                Actor.log.info(f"✅ COMPLETATO! {total_links} link totali salvati")
-                break
+                Actor.log.info(f"✅ Tentativo {attempt} completato: {total_links} link totali")
+                if total_links > 0:
+                    break  # Successo!
 
             except Exception as e:
-                Actor.log.warning(f"⚠️ Errore: {str(e)[:100]}...")
+                Actor.log.warning(f"⚠️ Errore tentativo {attempt}: {str(e)[:100]}")
             finally:
                 try:
                     if page: await page.close()
@@ -187,5 +208,4 @@ class ImmobiliareScraper:
                     if playwright: await playwright.stop()
                 except: pass
 
-        Actor.log.info("👋 Actor terminato")
-
+        Actor.log.info(f"👋 Actor terminato. Link totali: {total_links}")
