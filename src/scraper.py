@@ -35,11 +35,12 @@ class ImmobiliareScraper:
             return False
 
     # ----------------------------
-    # Browser / Proxy (APIFY-SAFE)
+    # Browser / Proxy (CORRETTO PER APIFY PYTHON)
     # ----------------------------
     async def launch_browser(self):
-        # Usa helper Apify (evita ERR_INVALID_AUTH_CREDENTIALS)
-        proxy_url = await Actor.get_proxy_url(groups=["RESIDENTIAL"])
+        # Metodo CORRETTO per apify>=3.x
+        proxy_config = await Actor.create_proxy_configuration(groups=["RESIDENTIAL"])
+        proxy_url = proxy_config.new_url()
 
         playwright = await async_playwright().start()
 
@@ -62,23 +63,20 @@ class ImmobiliareScraper:
         return playwright, browser, context, page
 
     # ----------------------------
-    # Anti-captcha warmup (SAFE)
+    # Anti-captcha warmup
     # ----------------------------
     async def warmup_flow(self, page: Page):
-        # Homepage (protetta da try)
         try:
             await page.goto(self.BASE_URL, wait_until="domcontentloaded", timeout=30000)
         except Exception:
-            raise RuntimeError("Proxy auth failed on homepage")
+            raise RuntimeError("Proxy / network error on homepage")
 
         await self.human_pause(6, 10)
 
-        # Attività umana
         await page.mouse.move(250, 350)
         await page.mouse.wheel(0, 1000)
         await self.human_pause(4, 6)
 
-        # Click Compra se presente
         try:
             buy_btn = await page.query_selector("a:has-text('Compra')")
             if buy_btn:
@@ -103,7 +101,7 @@ class ImmobiliareScraper:
             return []
 
     # ----------------------------
-    # Main runner with HARD retry
+    # Main runner with retry
     # ----------------------------
     async def run(self, max_pages: int = 1):
         search_url = self.build_search_url()
@@ -116,10 +114,8 @@ class ImmobiliareScraper:
             try:
                 playwright, browser, context, page = await self.launch_browser()
 
-                # Warmup
                 await self.warmup_flow(page)
 
-                # Vai ai risultati
                 await page.goto(search_url, wait_until="networkidle", timeout=45000)
                 await self.human_pause(8, 12)
 
@@ -135,7 +131,7 @@ class ImmobiliareScraper:
                     links = await self.extract_listing_links(page)
                     Actor.log.info(f"🔗 Annunci trovati: {len(links)}")
 
-                    for url in links[:5]:  # limite anti-ban
+                    for url in links[:5]:
                         await page.goto(url, wait_until="domcontentloaded", timeout=30000)
                         await self.human_pause(7, 11)
 
@@ -157,7 +153,7 @@ class ImmobiliareScraper:
                 break
 
             except RuntimeError as e:
-                Actor.log.warning(f"⚠️ {e} → rotazione proxy")
+                Actor.log.warning(f"⚠️ {e} → retry")
 
             finally:
                 if context:
