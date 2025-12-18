@@ -18,6 +18,15 @@
         "minimum": 1,
         "editor": "number"
       },
+
+
+      "city_id": {
+        "title": "City ID (Immobiliare)",
+        "type": "integer",
+        "description": "ID numerico del comune (es. Roma = 6737)",
+        "editor": "number"
+      },
+      
       "municipality": {
         "title": "Città/Comune",
         "description": "Comune o città da cercare (es. Chieti)",
