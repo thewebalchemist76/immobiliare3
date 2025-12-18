@@ -20,7 +20,7 @@
     },
     "municipality": {
       "title": "Città/Comune",
-      "description": "Nome del comune",
+      "description": "Nome del comune (usato solo come fallback UI)",
       "type": "string",
       "default": "Chieti",
       "editor": "textfield"
@@ -31,6 +31,7 @@
       "type": "string",
       "default": "vendita",
       "enum": ["vendita", "affitto"],
+      "enumSuggestedValues": ["vendita", "affitto"],
       "editor": "select"
     },
     "min_price": {
@@ -77,16 +78,45 @@
     },
     "bathrooms": {
       "title": "Bagni",
-      "description": "Numero minimo di bagni",
+      "description": "Numero di bagni",
       "type": "integer",
       "default": 0,
       "editor": "number"
+    },
+    "property_condition": {
+      "title": "Stato immobile",
+      "description": "Condizione dell'immobile",
+      "type": "string",
+      "default": "Indifferente",
+      "editor": "textfield"
+    },
+    "floor": {
+      "title": "Piano",
+      "description": "Piano dell'immobile",
+      "type": "string",
+      "default": "Indifferente",
+      "editor": "textfield"
+    },
+    "garage": {
+      "title": "Garage/Posto auto",
+      "description": "Tipo di garage o posto auto",
+      "type": "string",
+      "default": "Indifferente",
+      "editor": "textfield"
+    },
+    "heating": {
+      "title": "Riscaldamento",
+      "description": "Tipo di riscaldamento",
+      "type": "string",
+      "default": "Indifferente",
+      "editor": "textfield"
     },
     "garden": {
       "title": "Giardino",
       "description": "Tipo di giardino",
       "type": "string",
       "default": "Indifferente",
+      "enumSuggestedValues": ["Indifferente", "privato", "comune"],
       "editor": "select"
     },
     "terrace": {
@@ -133,7 +163,7 @@
     },
     "exclude_auctions": {
       "title": "Escludi aste",
-      "description": "Esclude immobili all'asta",
+      "description": "Esclude immobili venduti tramite asta",
       "type": "boolean",
       "default": false,
       "editor": "checkbox"
@@ -147,7 +177,7 @@
     },
     "keywords": {
       "title": "Parole chiave",
-      "description": "Parole chiave nella descrizione",
+      "description": "Parole chiave da cercare nella descrizione",
       "type": "string",
       "default": "",
       "editor": "textfield"
