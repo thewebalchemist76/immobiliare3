@@ -10,6 +10,13 @@
       "default": 1,
       "minimum": 1
     },
+    "max_items": {
+      "title": "Max pagine",
+      "description": "Numero massimo di pagine risultati da scansionare",
+      "type": "integer",
+      "default": 1,
+      "minimum": 1
+    },
     "city_id": {
       "title": "City ID (Immobiliare)",
       "type": "integer",
