@@ -28,7 +28,7 @@ class ImmobiliareScraper:
             "size": 25,
         }
 
-        # price → SOLO per vendita
+        # price → solo per vendita
         if op == "vendita":
             if f.get("min_price") is not None:
                 params["pm"] = f["min_price"]
@@ -96,7 +96,7 @@ class ImmobiliareScraper:
                         "id": item.get("id"),
                         "title": item.get("title"),
                         "price": item.get("price"),
-                        "city": item.get("city"),
+                        "city": item.get("geography", {}).get("municipality", {}).get("name"),
                         "url": f"https://www.immobiliare.it/annunci/{item.get('id')}/",
                         "raw": item,
                     })
