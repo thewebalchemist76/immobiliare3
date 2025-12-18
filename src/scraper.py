@@ -9,31 +9,27 @@ class ImmobiliareScraper:
     def __init__(self, filters: dict):
         self.filters = filters
 
-    def city_to_id(self, name: str) -> int:
-        mapping = {
-            "roma": 6737,
-            "chieti": 4617,
-        }
-        return mapping.get((name or "").lower(), 6737)
-
     def build_params(self, start: int) -> dict:
         f = self.filters
         op = (f.get("operation") or "").lower()
 
+        city_id = f.get("city_id")
+        if not city_id:
+            raise ValueError("city_id is required")
+
         params = {
-            "c": self.city_to_id(f.get("municipality")),
+            "c": int(city_id),
             "cat": 1,
             "t": "a" if op == "affitto" else "v",
             "start": start,
             "size": 25,
         }
 
-        # price → solo per vendita
-        if op == "vendita":
-            if f.get("min_price") is not None:
-                params["pm"] = f["min_price"]
-            if f.get("max_price") is not None:
-                params["px"] = f["max_price"]
+        # price (applica solo se valorizzato)
+        if f.get("min_price") is not None:
+            params["pm"] = f["min_price"]
+        if f.get("max_price") is not None:
+            params["px"] = f["max_price"]
 
         # size
         if f.get("min_size"):
@@ -50,22 +46,28 @@ class ImmobiliareScraper:
         # features
         if f.get("lift"):
             params["ac2_ascensore"] = 1
+
         if f.get("garden") in ("privato", "comune"):
             params["ac3_giard"] = 10
+
         if f.get("terrace"):
             params["ac1_terr"] = 1
+
         if f.get("balcony"):
             params["ac1_bal"] = 1
+
         if f.get("pool"):
             params["ac1_pisc"] = 1
+
         if f.get("furnished"):
             params["arred"] = 1
+
         if f.get("exclude_auctions"):
             params["noAste"] = 1
 
         return params
 
-    async def run(self, max_pages: int = 3):
+    async def run(self, max_pages: int = 1):
         headers = {
             "User-Agent": "WSCommand3<Furious>|REL|PRD|ANDROID",
             "Accept-Language": "it-IT",
@@ -97,6 +99,7 @@ class ImmobiliareScraper:
                         "title": item.get("title"),
                         "price": item.get("price"),
                         "city": item.get("geography", {}).get("municipality", {}).get("name"),
+                        "province": item.get("geography", {}).get("province", {}).get("name"),
                         "url": f"https://www.immobiliare.it/annunci/{item.get('id')}/",
                         "raw": item,
                     })
