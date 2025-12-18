@@ -6,12 +6,6 @@
   "properties": {
     "max_items": {
       "title": "Max pagine",
-      "type": "integer",
-      "default": 1,
-      "minimum": 1
-    },
-    "max_items": {
-      "title": "Max pagine",
       "description": "Numero massimo di pagine risultati da scansionare",
       "type": "integer",
       "default": 1,
@@ -19,36 +13,147 @@
     },
     "city_id": {
       "title": "City ID (Immobiliare)",
-      "type": "integer",
-      "description": "ID numerico del comune (es. Roma = 6737)"
+      "description": "ID numerico del comune (es. Roma = 6737)",
+      "type": "integer"
     },
     "municipality": {
       "title": "Città/Comune",
+      "description": "Nome del comune (usato solo come fallback UI)",
       "type": "string",
       "default": "Chieti"
     },
     "operation": {
       "title": "Operazione",
+      "description": "Tipo di operazione immobiliare",
       "type": "string",
       "default": "vendita",
       "enum": ["vendita", "affitto"]
     },
-    "min_price": { "title": "Prezzo minimo (€)", "type": "integer", "default": 50000 },
-    "max_price": { "title": "Prezzo massimo (€)", "type": "integer", "default": 80000 },
-    "min_size": { "title": "Superficie minima (m²)", "type": "integer", "default": 0 },
-    "max_size": { "title": "Superficie massima (m²)", "type": "integer", "default": 0 },
-    "min_rooms": { "title": "Locali minimi", "type": "integer", "default": 0 },
-    "max_rooms": { "title": "Locali massimi", "type": "integer", "default": 0 },
-    "bathrooms": { "title": "Bagni", "type": "integer", "default": 0 },
-    "garden": { "title": "Giardino", "type": "string", "default": "Indifferente" },
-    "terrace": { "title": "Terrazzo", "type": "boolean", "default": false },
-    "balcony": { "title": "Balcone", "type": "boolean", "default": false },
-    "lift": { "title": "Ascensore", "type": "boolean", "default": false },
-    "furnished": { "title": "Arredato", "type": "boolean", "default": false },
-    "cellar": { "title": "Cantina", "type": "boolean", "default": false },
-    "pool": { "title": "Piscina", "type": "boolean", "default": false },
-    "exclude_auctions": { "title": "Escludi aste", "type": "boolean", "default": false },
-    "virtual_tour": { "title": "Virtual tour", "type": "boolean", "default": false },
-    "keywords": { "title": "Parole chiave", "type": "string", "default": "" }
+    "min_price": {
+      "title": "Prezzo minimo (€)",
+      "description": "Prezzo minimo dell'immobile",
+      "type": "integer",
+      "default": 50000
+    },
+    "max_price": {
+      "title": "Prezzo massimo (€)",
+      "description": "Prezzo massimo dell'immobile",
+      "type": "integer",
+      "default": 80000
+    },
+    "min_size": {
+      "title": "Superficie minima (m²)",
+      "description": "Superficie minima in metri quadri",
+      "type": "integer",
+      "default": 0
+    },
+    "max_size": {
+      "title": "Superficie massima (m²)",
+      "description": "Superficie massima in metri quadri",
+      "type": "integer",
+      "default": 0
+    },
+    "min_rooms": {
+      "title": "Locali minimi",
+      "description": "Numero minimo di locali",
+      "type": "integer",
+      "default": 0
+    },
+    "max_rooms": {
+      "title": "Locali massimi",
+      "description": "Numero massimo di locali",
+      "type": "integer",
+      "default": 0
+    },
+    "bathrooms": {
+      "title": "Bagni",
+      "description": "Numero minimo di bagni",
+      "type": "integer",
+      "default": 0
+    },
+    "property_condition": {
+      "title": "Stato immobile",
+      "description": "Condizione dell'immobile",
+      "type": "string",
+      "default": "Indifferente"
+    },
+    "floor": {
+      "title": "Piano",
+      "description": "Piano dell'immobile",
+      "type": "string",
+      "default": "Indifferente"
+    },
+    "garage": {
+      "title": "Garage/Posto auto",
+      "description": "Presenza o tipo di garage/posto auto",
+      "type": "string",
+      "default": "Indifferente"
+    },
+    "heating": {
+      "title": "Riscaldamento",
+      "description": "Tipo di riscaldamento",
+      "type": "string",
+      "default": "Indifferente"
+    },
+    "garden": {
+      "title": "Giardino",
+      "description": "Presenza o tipo di giardino",
+      "type": "string",
+      "default": "Indifferente"
+    },
+    "terrace": {
+      "title": "Terrazzo",
+      "description": "Solo immobili con terrazzo",
+      "type": "boolean",
+      "default": false
+    },
+    "balcony": {
+      "title": "Balcone",
+      "description": "Solo immobili con balcone",
+      "type": "boolean",
+      "default": false
+    },
+    "lift": {
+      "title": "Ascensore",
+      "description": "Solo immobili con ascensore",
+      "type": "boolean",
+      "default": false
+    },
+    "furnished": {
+      "title": "Arredato",
+      "description": "Solo immobili arredati",
+      "type": "boolean",
+      "default": false
+    },
+    "cellar": {
+      "title": "Cantina",
+      "description": "Solo immobili con cantina",
+      "type": "boolean",
+      "default": false
+    },
+    "pool": {
+      "title": "Piscina",
+      "description": "Solo immobili con piscina",
+      "type": "boolean",
+      "default": false
+    },
+    "exclude_auctions": {
+      "title": "Escludi aste",
+      "description": "Esclude immobili venduti tramite asta",
+      "type": "boolean",
+      "default": false
+    },
+    "virtual_tour": {
+      "title": "Virtual tour",
+      "description": "Solo annunci con virtual tour",
+      "type": "boolean",
+      "default": false
+    },
+    "keywords": {
+      "title": "Parole chiave",
+      "description": "Parole chiave da cercare nella descrizione",
+      "type": "string",
+      "default": ""
+    }
   }
 }
