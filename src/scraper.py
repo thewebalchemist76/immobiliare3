@@ -72,7 +72,7 @@ class ImmobiliareScraper:
                 r.raise_for_status()
 
                 data = r.json()
-                items = data.get("items", [])
+                items = data.get("properties", [])
 
                 if not items:
                     Actor.log.info("⛔ Nessun altro risultato")
