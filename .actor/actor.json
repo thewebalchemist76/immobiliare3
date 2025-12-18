@@ -1,4 +1,5 @@
 {
   "actorSpecification": 1,
-  "name": "immobiliare-scraper"
+  "name": "immobiliare-scraper",
+  "version": "0.0.7"
 }
