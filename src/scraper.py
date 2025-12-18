@@ -38,8 +38,8 @@ class ImmobiliareScraper:
         # boolean → API flags
         if f.get("lift"):
             params["ac2_ascensore"] = 1
-        if f.get("garden"):
-            params["ac3_giard"] = 10
+        if f.get("garden") in ("privato", "comune"):
+            params["ac3_giard"] = 10    
         if f.get("terrace"):
             params["ac1_terr"] = 1
         if f.get("balcony"):
