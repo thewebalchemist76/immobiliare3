@@ -28,11 +28,12 @@ class ImmobiliareScraper:
             "size": 25,
         }
 
-        # price
-        if f.get("min_price") is not None:
-            params["pm"] = f["min_price"]
-        if f.get("max_price") is not None:
-            params["px"] = f["max_price"]
+        # price → SOLO per vendita
+        if op == "vendita":
+            if f.get("min_price") is not None:
+                params["pm"] = f["min_price"]
+            if f.get("max_price") is not None:
+                params["px"] = f["max_price"]
 
         # size
         if f.get("min_size"):
@@ -46,7 +47,7 @@ class ImmobiliareScraper:
         if f.get("max_rooms"):
             params["rx"] = f["max_rooms"]
 
-        # features (solo se selezionate)
+        # features
         if f.get("lift"):
             params["ac2_ascensore"] = 1
         if f.get("garden") in ("privato", "comune"):
