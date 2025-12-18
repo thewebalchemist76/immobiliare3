@@ -1,6 +1,6 @@
 {
-  "title": "Immobiliare.it – Mobile API Scraper",
-  "description": "Filtri di ricerca. city_id è obbligatorio ed è l’unico usato per la città.",
+  "title": "Immobiliare.it – Mobile API Scraper (Autocomplete LIVE)",
+  "description": "L’agente scrive una città/zona. L’actor risolve automaticamente l’ID via /geography/autocomplete (solo IT) e poi scarica gli annunci.",
   "type": "object",
   "schemaVersion": 1,
   "properties": {
@@ -12,18 +12,18 @@
       "minimum": 1,
       "editor": "number"
     },
-    "city_id": {
-      "title": "City ID (Immobiliare)",
-      "description": "ID numerico del comune (OBBLIGATORIO). Es: Roma=6737, Pescara=6790",
-      "type": "integer",
-      "editor": "number"
-    },
-    "municipality": {
-      "title": "Nome città (solo display)",
-      "description": "Nome della città solo per visualizzazione. NON usato per la ricerca.",
+    "location_query": {
+      "title": "Città / zona",
+      "description": "Scrivi: es. Pescara, Chieti Scalo, Centro Storico. Verrà risolta automaticamente (solo Italia).",
       "type": "string",
       "default": "",
       "editor": "textfield"
+    },
+    "location_id": {
+      "title": "Location ID (override)",
+      "description": "Opzionale. Se lo inserisci, bypassa la risoluzione automatica. Può essere comune (type=2) o zona/quartiere (type=3).",
+      "type": "integer",
+      "editor": "number"
     },
     "operation": {
       "title": "Operazione",
@@ -35,49 +35,42 @@
     },
     "min_price": {
       "title": "Prezzo minimo",
-      "description": "Prezzo minimo (vendita: €, affitto: €/mese). Lascia vuoto per ignorare.",
+      "description": "Lascia vuoto per ignorare.",
       "type": "integer",
       "minimum": 0,
       "editor": "number"
     },
     "max_price": {
       "title": "Prezzo massimo",
-      "description": "Prezzo massimo (vendita: €, affitto: €/mese). Lascia vuoto per ignorare.",
+      "description": "Lascia vuoto per ignorare.",
       "type": "integer",
       "minimum": 0,
       "editor": "number"
     },
     "min_size": {
       "title": "Superficie minima (m²)",
-      "description": "Superficie minima in metri quadri.",
+      "description": "Lascia vuoto/0 per ignorare.",
       "type": "integer",
       "minimum": 0,
       "editor": "number"
     },
     "max_size": {
       "title": "Superficie massima (m²)",
-      "description": "Superficie massima in metri quadri.",
+      "description": "Lascia vuoto/0 per ignorare.",
       "type": "integer",
       "minimum": 0,
       "editor": "number"
     },
     "min_rooms": {
       "title": "Locali minimi",
-      "description": "Numero minimo di locali.",
+      "description": "Lascia vuoto/0 per ignorare.",
       "type": "integer",
       "minimum": 0,
       "editor": "number"
     },
     "max_rooms": {
       "title": "Locali massimi",
-      "description": "Numero massimo di locali.",
-      "type": "integer",
-      "minimum": 0,
-      "editor": "number"
-    },
-    "bathrooms": {
-      "title": "Bagni minimi",
-      "description": "Numero minimo di bagni.",
+      "description": "Lascia vuoto/0 per ignorare.",
       "type": "integer",
       "minimum": 0,
       "editor": "number"
@@ -118,13 +111,6 @@
       "default": false,
       "editor": "checkbox"
     },
-    "cellar": {
-      "title": "Cantina",
-      "description": "Solo immobili con cantina.",
-      "type": "boolean",
-      "default": false,
-      "editor": "checkbox"
-    },
     "pool": {
       "title": "Piscina",
       "description": "Solo immobili con piscina.",
@@ -138,21 +124,7 @@
       "type": "boolean",
       "default": false,
       "editor": "checkbox"
-    },
-    "virtual_tour": {
-      "title": "Virtual tour",
-      "description": "Solo annunci con virtual tour.",
-      "type": "boolean",
-      "default": false,
-      "editor": "checkbox"
-    },
-    "keywords": {
-      "title": "Parole chiave",
-      "description": "Campo informativo (non usato dall’API).",
-      "type": "string",
-      "default": "",
-      "editor": "textfield"
     }
   },
-  "required": ["city_id"]
+  "required": []
 }

@@ -8,26 +8,33 @@ async def main():
         actor_input = await Actor.get_input() or {}
 
         filters = {
-            "city_id": actor_input.get("city_id"),
-            "municipality": actor_input.get("municipality", ""),
+            # autocomplete LIVE
+            "location_query": actor_input.get("location_query", "").strip(),
+            "location_id": actor_input.get("location_id"),
+
+            # operation
             "operation": actor_input.get("operation", "vendita"),
+
+            # price
             "min_price": actor_input.get("min_price"),
             "max_price": actor_input.get("max_price"),
+
+            # size
             "min_size": actor_input.get("min_size"),
             "max_size": actor_input.get("max_size"),
+
+            # rooms
             "min_rooms": actor_input.get("min_rooms"),
             "max_rooms": actor_input.get("max_rooms"),
-            "bathrooms": actor_input.get("bathrooms"),
+
+            # features
             "garden": actor_input.get("garden", "Indifferente"),
             "terrace": actor_input.get("terrace", False),
             "balcony": actor_input.get("balcony", False),
             "lift": actor_input.get("lift", False),
             "furnished": actor_input.get("furnished", False),
-            "cellar": actor_input.get("cellar", False),
             "pool": actor_input.get("pool", False),
             "exclude_auctions": actor_input.get("exclude_auctions", False),
-            "virtual_tour": actor_input.get("virtual_tour", False),
-            "keywords": actor_input.get("keywords", ""),
         }
 
         max_pages = int(actor_input.get("max_items", 1) or 1)
