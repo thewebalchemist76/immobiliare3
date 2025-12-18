@@ -1,3 +1,4 @@
+import uuid
 import httpx
 from apify import Actor
 
@@ -19,25 +20,21 @@ class ImmobiliareScraper:
             "start": start,
         }
 
-        # price
         if f.get("min_price") is not None:
             params["pm"] = f["min_price"]
         if f.get("max_price") is not None:
             params["px"] = f["max_price"]
 
-        # size
         if f.get("min_size"):
             params["sm"] = f["min_size"]
         if f.get("max_size"):
             params["sx"] = f["max_size"]
 
-        # rooms
         if f.get("min_rooms"):
             params["rm"] = f["min_rooms"]
         if f.get("max_rooms"):
             params["rx"] = f["max_rooms"]
 
-        # features (apply only when selected)
         if f.get("lift"):
             params["ac2_ascensore"] = 1
 
@@ -67,6 +64,7 @@ class ImmobiliareScraper:
             "accept-language": "it-IT",
             "x-currency": "EUR",
             "x-measurement-unit": "meters",
+            "immo-id": str(uuid.uuid4()),
         }
 
         async with httpx.AsyncClient(headers=headers, timeout=30) as client:
