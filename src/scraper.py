@@ -78,6 +78,7 @@ class ImmobiliareScraper:
                 r.raise_for_status()
 
                 data = r.json()
+                Actor.log.info(f"RESPONSE KEYS = {list(data.keys())}")
                 items = data.get("properties", [])
 
                 if not items:
