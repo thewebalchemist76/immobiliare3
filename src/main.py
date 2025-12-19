@@ -6,39 +6,39 @@ from src.scraper import ImmobiliareScraper
 async def main():
     async with Actor:
         actor_input = await Actor.get_input() or {}
-        Actor.log.info(f"INPUT RICEVUTO: {actor_input}")
+
+        # 🔴 FIX: usa municipality come location_query
+        location_query = actor_input.get("municipality") or actor_input.get("location_query")
 
         filters = {
-            # autocomplete LIVE
-            "location_query": actor_input.get("location_query", "").strip(),
-            "location_id": actor_input.get("location_id"),
-
-            # operation
+            "location_query": location_query,
             "operation": actor_input.get("operation", "vendita"),
-
-            # price
             "min_price": actor_input.get("min_price"),
             "max_price": actor_input.get("max_price"),
-
-            # size
             "min_size": actor_input.get("min_size"),
             "max_size": actor_input.get("max_size"),
-
-            # rooms
             "min_rooms": actor_input.get("min_rooms"),
             "max_rooms": actor_input.get("max_rooms"),
-
-            # features
-            "garden": actor_input.get("garden", "Indifferente"),
-            "terrace": actor_input.get("terrace", False),
-            "balcony": actor_input.get("balcony", False),
-            "lift": actor_input.get("lift", False),
-            "furnished": actor_input.get("furnished", False),
-            "pool": actor_input.get("pool", False),
-            "exclude_auctions": actor_input.get("exclude_auctions", False),
+            "bathrooms": actor_input.get("bathrooms"),
+            "property_condition": actor_input.get("property_condition"),
+            "floor": actor_input.get("floor"),
+            "garage": actor_input.get("garage"),
+            "heating": actor_input.get("heating"),
+            "garden": actor_input.get("garden"),
+            "terrace": actor_input.get("terrace"),
+            "balcony": actor_input.get("balcony"),
+            "lift": actor_input.get("lift"),
+            "furnished": actor_input.get("furnished"),
+            "cellar": actor_input.get("cellar"),
+            "pool": actor_input.get("pool"),
+            "exclude_auctions": actor_input.get("exclude_auctions"),
+            "virtual_tour": actor_input.get("virtual_tour"),
+            "keywords": actor_input.get("keywords"),
         }
 
-        max_pages = int(actor_input.get("max_items", 1) or 1)
+        max_pages = actor_input.get("max_items", 1)
+
+        Actor.log.info(f"INPUT NORMALIZZATO: {filters}")
 
         scraper = ImmobiliareScraper(filters)
         await scraper.run(max_pages=max_pages)
