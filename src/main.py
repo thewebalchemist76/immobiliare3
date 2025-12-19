@@ -6,6 +6,7 @@ from src.scraper import ImmobiliareScraper
 async def main():
     async with Actor:
         actor_input = await Actor.get_input() or {}
+        Actor.log.info(f"INPUT RICEVUTO: {actor_input}")
 
         filters = {
             # autocomplete LIVE
