@@ -3,12 +3,30 @@ from apify import Actor
 from src.scraper import ImmobiliareScraper
 
 
+def normalize_location(actor_input: dict) -> str | None:
+    # 1️⃣ location_query esplicita
+    loc = actor_input.get("location_query")
+    if isinstance(loc, str) and loc.strip():
+        return loc.strip()
+
+    # 2️⃣ municipality top-level
+    mun = actor_input.get("municipality")
+    if isinstance(mun, str) and mun.strip():
+        return mun.strip()
+
+    # 3️⃣ municipality annidata (caso Apify)
+    nested = actor_input.get("input", {}).get("municipality")
+    if isinstance(nested, str) and nested.strip():
+        return nested.strip()
+
+    return None
+
+
 async def main():
     async with Actor:
         actor_input = await Actor.get_input() or {}
 
-        # 🔴 FIX: usa municipality come location_query
-        location_query = actor_input.get("municipality") or actor_input.get("location_query")
+        location_query = normalize_location(actor_input)
 
         filters = {
             "location_query": location_query,
