@@ -57,7 +57,7 @@ class ImmobiliareScraper:
             "size": 25,
         }
 
-        # prezzo
+        # prezzoprezzo
         if f.get("min_price") is not None:
             params["pm"] = f["min_price"]
         if f.get("max_price") is not None:
