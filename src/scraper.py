@@ -58,9 +58,7 @@ class ImmobiliareScraper:
         }
 
         # ===== ORDINAMENTO PER DATA =====
-        # default: più recenti
         order = f.get("order", "recent")
-
         params["of"] = "d"
         params["od"] = "d" if order == "recent" else "a"
 
@@ -138,4 +136,5 @@ class ImmobiliareScraper:
                         "city": geo.get("municipality", {}).get("name"),
                         "province": geo.get("province", {}).get("name"),
                         "url": f"https://www.immobiliare.it/annunci/{item.get('id')}/",
-                        "raw":
+                        "raw": item,
+                    })
