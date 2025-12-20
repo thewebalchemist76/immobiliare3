@@ -11,44 +11,37 @@ class ImmobiliareScraper:
         self.filters = filters
 
     async def resolve_location_id(self, client: httpx.AsyncClient) -> int:
-        # override manuale
-        if self.filters.get("location_id"):
-            return int(self.filters["location_id"])
-
         query = self.filters.get("location_query")
         if not query:
-            raise ValueError("Devi fornire una città o zona")
+            raise ValueError("location_query obbligatorio")
 
         r = await client.get(self.GEO_URL, params={"query": query})
         r.raise_for_status()
         data = r.json()
 
-        query_l = query.lower()
-        city_match = None
-        zone_match = None
+        q = query.strip().lower()
+        city = None
+        zone = None
 
         for item in data:
-            parent_ids = [p["id"] for p in item.get("parents", [])]
-            if "IT" not in parent_ids:
+            parents = [str(p.get("id")) for p in item.get("parents", [])]
+            if "IT" not in parents:
                 continue
 
-            label_l = item.get("label", "").lower()
+            label = item.get("label", "").strip().lower()
 
-            # PRIORITÀ: comune
-            if item.get("type") == 2 and label_l == query_l:
-                city_match = item
+            if item.get("type") == 2 and label == q:
+                city = item
                 break
+            if item.get("type") == 3 and label == q:
+                zone = item
 
-            # fallback: quartiere
-            if item.get("type") == 3 and label_l == query_l:
-                zone_match = item
-
-        chosen = city_match or zone_match
+        chosen = city or zone
         if not chosen:
-            raise ValueError(f"Nessuna location valida trovata per '{query}'")
+            raise ValueError(f"Nessuna location valida per '{query}'")
 
         Actor.log.info(
-            f"📍 Location risolta: {chosen['label']} (id={chosen['id']}, type={chosen['type']})"
+            f"📍 Location: {chosen['label']} (id={chosen['id']}, type={chosen['type']})"
         )
         return int(chosen["id"])
 
@@ -64,21 +57,25 @@ class ImmobiliareScraper:
             "size": 25,
         }
 
+        # prezzo
         if f.get("min_price") is not None:
             params["pm"] = f["min_price"]
         if f.get("max_price") is not None:
             params["px"] = f["max_price"]
 
+        # superficie
         if f.get("min_size"):
             params["sm"] = f["min_size"]
         if f.get("max_size"):
             params["sx"] = f["max_size"]
 
+        # locali
         if f.get("min_rooms"):
             params["rm"] = f["min_rooms"]
         if f.get("max_rooms"):
             params["rx"] = f["max_rooms"]
 
+        # features
         if f.get("lift"):
             params["ac2_ascensore"] = 1
         if f.get("garden") in ("privato", "comune"):
@@ -106,7 +103,9 @@ class ImmobiliareScraper:
         }
 
         async with httpx.AsyncClient(headers=headers, timeout=30) as client:
-            location_id = await self.resolve_location_id(client)
+            location_id = self.filters.get("location_id")
+            if not location_id:
+                location_id = await self.resolve_location_id(client)
 
             for page in range(max_pages):
                 start = page * 25
@@ -116,10 +115,9 @@ class ImmobiliareScraper:
 
                 r = await client.get(self.LISTING_URL, params=params)
                 r.raise_for_status()
-
                 data = r.json()
-                items = data.get("list", [])
 
+                items = data.get("list", [])
                 if not items:
                     Actor.log.info("⛔ Nessun altro risultato")
                     break
