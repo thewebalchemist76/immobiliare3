@@ -57,25 +57,32 @@ class ImmobiliareScraper:
             "size": 25,
         }
 
-        # prezzo
+        # ===== ORDINAMENTO PER DATA =====
+        # default: più recenti
+        order = f.get("order", "recent")
+
+        params["of"] = "d"
+        params["od"] = "d" if order == "recent" else "a"
+
+        # ===== PREZZO =====
         if f.get("min_price") is not None:
             params["pm"] = f["min_price"]
         if f.get("max_price") is not None:
             params["px"] = f["max_price"]
 
-        # superficie
+        # ===== SUPERFICIE =====
         if f.get("min_size"):
             params["sm"] = f["min_size"]
         if f.get("max_size"):
             params["sx"] = f["max_size"]
 
-        # locali
+        # ===== LOCALI =====
         if f.get("min_rooms"):
             params["rm"] = f["min_rooms"]
         if f.get("max_rooms"):
             params["rx"] = f["max_rooms"]
 
-        # features
+        # ===== FEATURES =====
         if f.get("lift"):
             params["ac2_ascensore"] = 1
         if f.get("garden") in ("privato", "comune"):
@@ -131,5 +138,4 @@ class ImmobiliareScraper:
                         "city": geo.get("municipality", {}).get("name"),
                         "province": geo.get("province", {}).get("name"),
                         "url": f"https://www.immobiliare.it/annunci/{item.get('id')}/",
-                        "raw": item,
-                    })
+                        "raw":
