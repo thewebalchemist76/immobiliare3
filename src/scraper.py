@@ -10,10 +10,11 @@ class ImmobiliareScraper:
     def __init__(self, filters: dict):
         self.filters = filters
 
+    # ===== LOCATION (fallback) =====
     async def resolve_location_id(self, client: httpx.AsyncClient) -> int:
         query = self.filters.get("location_query")
         if not query:
-            raise ValueError("location_query obbligatorio")
+            raise ValueError("location_query obbligatorio se points non è presente")
 
         r = await client.get(self.GEO_URL, params={"query": query})
         r.raise_for_status()
@@ -41,23 +42,29 @@ class ImmobiliareScraper:
             raise ValueError(f"Nessuna location valida per '{query}'")
 
         Actor.log.info(
-            f"📍 Location: {chosen['label']} (id={chosen['id']}, type={chosen['type']})"
+            f"📍 Location fallback: {chosen['label']} (id={chosen['id']})"
         )
         return int(chosen["id"])
 
-    def build_params(self, location_id: int, start: int) -> dict:
+    # ===== PARAMS =====
+    def build_params(self, location_id: int | None, start: int) -> dict:
         f = self.filters
         op = (f.get("operation") or "").lower()
 
         params = {
-            "c": location_id,
             "cat": 1,
             "t": "a" if op == "affitto" else "v",
             "start": start,
             "size": 25,
         }
 
-        # ===== ORDINAMENTO PER DATA =====
+        # ===== GEO =====
+        if f.get("points"):
+            params["points"] = f["points"]
+        else:
+            params["c"] = location_id
+
+        # ===== ORDINAMENTO =====
         order = f.get("order", "recent")
         params["of"] = "d"
         params["od"] = "d" if order == "recent" else "a"
@@ -98,6 +105,7 @@ class ImmobiliareScraper:
 
         return params
 
+    # ===== RUN =====
     async def run(self, max_pages: int = 1):
         headers = {
             "User-Agent": "WSCommand3<Furious>|REL|PRD|ANDROID",
@@ -108,9 +116,13 @@ class ImmobiliareScraper:
         }
 
         async with httpx.AsyncClient(headers=headers, timeout=30) as client:
-            location_id = self.filters.get("location_id")
-            if not location_id:
-                location_id = await self.resolve_location_id(client)
+            location_id = None
+
+            # se NON abbiamo points, risolvi location
+            if not self.filters.get("points"):
+                location_id = self.filters.get("location_id")
+                if not location_id:
+                    location_id = await self.resolve_location_id(client)
 
             for page in range(max_pages):
                 start = page * 25
