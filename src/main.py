@@ -9,12 +9,12 @@ def normalize_location(actor_input: dict) -> str | None:
     if isinstance(loc, str) and loc.strip():
         return loc.strip()
 
-    # 2️⃣ municipality top-level
+    # 2️⃣ municipality top-level (legacy)
     mun = actor_input.get("municipality")
     if isinstance(mun, str) and mun.strip():
         return mun.strip()
 
-    # 3️⃣ municipality annidata (caso Apify)
+    # 3️⃣ municipality annidata (caso Apify vecchio)
     nested = actor_input.get("input", {}).get("municipality")
     if isinstance(nested, str) and nested.strip():
         return nested.strip()
@@ -26,22 +26,39 @@ async def main():
     async with Actor:
         actor_input = await Actor.get_input() or {}
 
-        location_query = normalize_location(actor_input)
+        # ===== NORMALIZZAZIONE GEO =====
+        points = actor_input.get("points")
+        if isinstance(points, str) and points.strip():
+            points = points.strip()
+            location_query = None
+            location_id = None
+        else:
+            points = None
+            location_query = normalize_location(actor_input)
+            location_id = actor_input.get("location_id")
 
+        # ===== FILTRI =====
         filters = {
+            "points": points,
             "location_query": location_query,
+            "location_id": location_id,
+
             "operation": actor_input.get("operation", "vendita"),
+            "order": actor_input.get("order", "recent"),
+
             "min_price": actor_input.get("min_price"),
             "max_price": actor_input.get("max_price"),
             "min_size": actor_input.get("min_size"),
             "max_size": actor_input.get("max_size"),
             "min_rooms": actor_input.get("min_rooms"),
             "max_rooms": actor_input.get("max_rooms"),
+
             "bathrooms": actor_input.get("bathrooms"),
             "property_condition": actor_input.get("property_condition"),
             "floor": actor_input.get("floor"),
             "garage": actor_input.get("garage"),
             "heating": actor_input.get("heating"),
+
             "garden": actor_input.get("garden"),
             "terrace": actor_input.get("terrace"),
             "balcony": actor_input.get("balcony"),
@@ -50,6 +67,7 @@ async def main():
             "cellar": actor_input.get("cellar"),
             "pool": actor_input.get("pool"),
             "exclude_auctions": actor_input.get("exclude_auctions"),
+
             "virtual_tour": actor_input.get("virtual_tour"),
             "keywords": actor_input.get("keywords"),
         }
