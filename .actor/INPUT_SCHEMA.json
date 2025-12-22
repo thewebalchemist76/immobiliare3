@@ -1,6 +1,6 @@
 {
-  "title": "Immobiliare.it – Mobile API Scraper (Autocomplete LIVE)",
-  "description": "L’agente scrive una città/zona. L’actor risolve automaticamente l’ID via /geography/autocomplete (solo IT) e poi scarica gli annunci.",
+  "title": "Immobiliare.it – Mobile API Scraper (Autocomplete + Bounding Box)",
+  "description": "Ricerca annunci per città/zona (autocomplete) oppure per bounding box (points). Se points è presente, bypassa location_query/location_id.",
   "type": "object",
   "schemaVersion": 1,
   "properties": {
@@ -12,19 +12,30 @@
       "minimum": 1,
       "editor": "number"
     },
+
     "location_query": {
       "title": "Città / zona",
-      "description": "Scrivi: es. Pescara, Chieti Scalo, Centro Storico. Verrà risolta automaticamente (solo Italia).",
+      "description": "Scrivi: es. Pescara, Chieti Scalo, Centro Storico. Ignorato se points è valorizzato.",
       "type": "string",
       "default": "",
       "editor": "textfield"
     },
+
     "location_id": {
       "title": "Location ID (override)",
-      "description": "Opzionale. Se lo inserisci, bypassa la risoluzione automatica. Può essere comune (type=2) o zona/quartiere (type=3).",
+      "description": "Opzionale. Bypassa l’autocomplete. Ignorato se points è valorizzato.",
       "type": "integer",
       "editor": "number"
     },
+
+    "points": {
+      "title": "Bounding box (points)",
+      "description": "Poligono geografico: 'lat,lng lat,lng lat,lng lat,lng'. Se presente, sostituisce location_query.",
+      "type": "string",
+      "default": "",
+      "editor": "textfield"
+    },
+
     "operation": {
       "title": "Operazione",
       "description": "Vendita o affitto.",
@@ -33,6 +44,16 @@
       "enum": ["vendita", "affitto"],
       "editor": "select"
     },
+
+    "order": {
+      "title": "Ordinamento",
+      "description": "Ordina gli annunci per data.",
+      "type": "string",
+      "default": "recent",
+      "enum": ["recent", "oldest"],
+      "editor": "select"
+    },
+
     "min_price": {
       "title": "Prezzo minimo",
       "description": "Lascia vuoto per ignorare.",
@@ -40,6 +61,7 @@
       "minimum": 0,
       "editor": "number"
     },
+
     "max_price": {
       "title": "Prezzo massimo",
       "description": "Lascia vuoto per ignorare.",
@@ -47,6 +69,7 @@
       "minimum": 0,
       "editor": "number"
     },
+
     "min_size": {
       "title": "Superficie minima (m²)",
       "description": "Lascia vuoto/0 per ignorare.",
@@ -54,6 +77,7 @@
       "minimum": 0,
       "editor": "number"
     },
+
     "max_size": {
       "title": "Superficie massima (m²)",
       "description": "Lascia vuoto/0 per ignorare.",
@@ -61,6 +85,7 @@
       "minimum": 0,
       "editor": "number"
     },
+
     "min_rooms": {
       "title": "Locali minimi",
       "description": "Lascia vuoto/0 per ignorare.",
@@ -68,6 +93,7 @@
       "minimum": 0,
       "editor": "number"
     },
+
     "max_rooms": {
       "title": "Locali massimi",
       "description": "Lascia vuoto/0 per ignorare.",
@@ -75,6 +101,7 @@
       "minimum": 0,
       "editor": "number"
     },
+
     "garden": {
       "title": "Giardino",
       "description": "Filtro giardino.",
@@ -83,6 +110,7 @@
       "enumSuggestedValues": ["Indifferente", "privato", "comune"],
       "editor": "select"
     },
+
     "terrace": {
       "title": "Terrazzo",
       "description": "Solo immobili con terrazzo.",
@@ -90,6 +118,7 @@
       "default": false,
       "editor": "checkbox"
     },
+
     "balcony": {
       "title": "Balcone",
       "description": "Solo immobili con balcone.",
@@ -97,6 +126,7 @@
       "default": false,
       "editor": "checkbox"
     },
+
     "lift": {
       "title": "Ascensore",
       "description": "Solo immobili con ascensore.",
@@ -104,6 +134,7 @@
       "default": false,
       "editor": "checkbox"
     },
+
     "furnished": {
       "title": "Arredato",
       "description": "Solo immobili arredati.",
@@ -111,6 +142,7 @@
       "default": false,
       "editor": "checkbox"
     },
+
     "pool": {
       "title": "Piscina",
       "description": "Solo immobili con piscina.",
@@ -118,6 +150,7 @@
       "default": false,
       "editor": "checkbox"
     },
+
     "exclude_auctions": {
       "title": "Escludi aste",
       "description": "Esclude immobili all’asta.",
